@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Respiración guiada · 1 minuto</title>
+
+<style>
+  /* ============================================================
+     RESET BÁSICO
+     ============================================================ */
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  :root {
+    /* Paleta pastel: azules y verdes suaves */
+    --bg-top:      #e3f2fd;
+    --bg-bottom:   #e8f6ee;
+    --sphere-a:    #bde0fe; /* azul pastel */
+    --sphere-b:    #9be8c9; /* verde pastel */
+    --text-main:   #35505a;
+    --text-sub:    #6f8b93;
+    --btn-bg:      #7fc8a9;
+    --btn-bg-hover:#6bb897;
+    --btn-disabled:#cfd8dc;
+  }
+
+  html, body {
+    height: 100%;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: linear-gradient(160deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+    color: var(--text-main);
+    overflow: hidden;
+  }
+
+  /* ============================================================
+     CONTENEDOR PRINCIPAL
+     ============================================================ */
+  .stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2.5rem;
+    padding: 1.5rem;
+    text-align: center;
+  }
+
+  /* Zona reservada para la esfera: su tamaño no cambia aunque
+     la esfera se expanda, así el layout nunca "salta". */
+  .sphere-zone {
+    width: 260px;
+    height: 260px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ============================================================
+     LA ESFERA
+     ============================================================ */
+  .sphere {
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 32% 28%, var(--sphere-a), var(--sphere-b) 75%);
+    box-shadow: 0 0 35px rgba(155, 232, 201, 0.55);
+    transform: scale(1);
+    /* La duración de 5s coincide exactamente con cada fase de
+       inhalar / exhalar controlada desde JavaScript. */
+    transition: transform 5s ease-in-out, box-shadow 5s ease-in-out;
+  }
+
+  .sphere.is-inhaling {
+    transform: scale(1.75);
+    box-shadow: 0 0 60px rgba(155, 232, 201, 0.8);
+  }
+
+  .sphere.is-exhaling {
+    transform: scale(1);
+    box-shadow: 0 0 25px rgba(155, 232, 201, 0.4);
+  }
+
+  /* ============================================================
+     TEXTOS
+     ============================================================ */
+  .instruction {
+    font-size: 1.7rem;
+    font-weight: 500;
+    min-height: 2.2rem;
+    transition: opacity 0.5s ease;
+  }
+
+  .status {
+    font-size: 0.95rem;
+    color: var(--text-sub);
+    min-height: 1.3rem;
+  }
+
+  /* ============================================================
+     BOTÓN
+     ============================================================ */
+  .btn-start {
+    border: none;
+    padding: 0.85rem 2.6rem;
+    border-radius: 999px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #ffffff;
+    background: var(--btn-bg);
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(127, 200, 169, 0.45);
+    transition: background 0.25s ease, transform 0.2s ease;
+  }
+
+  .btn-start:hover:not(:disabled) {
+    background: var(--btn-bg-hover);
+    transform: translateY(-2px);
+  }
+
+  .btn-start:disabled {
+    background: var(--btn-disabled);
+    color: #90a4ae;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+  }
+
+  /* Respeta la preferencia del usuario de reducir movimiento */
+  @media (prefers-reduced-motion: reduce) {
+    .sphere {
+      transition-duration: 0.3s;
+    }
+  }
+</style>
+</head>
+
+<body>
+
+  <main class="stage">
+    <div class="sphere-zone">
+      <div class="sphere" id="sphere"></div>
+    </div>
+
+    <div>
+      <p class="instruction" id="instruction">Respira...</p>
+      <p class="status" id="status">Un minuto para calmar la mente. Pulsa «Iniciar» cuando estés listo.</p>
+    </div>
+
+    <button class="btn-start" id="startBtn" type="button">Iniciar</button>
+  </main>
+
+<script>
+  // ==============================================================
+  // REFERENCIAS AL DOM
+  // ==============================================================
+  const sphere      = document.getElementById('sphere');
+  const instruction = document.getElementById('instruction');
+  const status      = document.getElementById('status');
+  const startBtn    = document.getElementById('startBtn');
+
+  // ==============================================================
+  // CONFIGURACIÓN DEL EJERCICIO
+  // ==============================================================
+  const PHASE_MS    = 5000; // 5 segundos por fase (inhalar o exhalar)
+  const TOTAL_CYCLES = 6;   // 6 ciclos de 10s = 60 segundos exactos
+
+  let cyclesDone = 0;
+
+  // --------------------------------------------------------------
+  // Arranca el ejercicio completo
+  // --------------------------------------------------------------
+  function startExercise() {
+    startBtn.disabled = true;
+    startBtn.textContent = 'En curso...';
+    cyclesDone = 0;
+    runNextCycle();
+  }
+
+  // --------------------------------------------------------------
+  // Decide si queda otro ciclo por hacer o si ya terminamos
+  // --------------------------------------------------------------
+  function runNextCycle() {
+    if (cyclesDone >= TOTAL_CYCLES) {
+      finishExercise();
+      return;
+    }
+
+    cyclesDone += 1;
+    status.textContent = `Ciclo ${cyclesDone} de ${TOTAL_CYCLES}`;
+    inhalePhase();
+  }
+
+  // --------------------------------------------------------------
+  // Fase 1 de cada ciclo: inhalar → la esfera se expande
+  // --------------------------------------------------------------
+  function inhalePhase() {
+    instruction.textContent = 'Inhala...';
+    sphere.classList.remove('is-exhaling');
+    sphere.classList.add('is-inhaling');
+
+    setTimeout(exhalePhase, PHASE_MS);
+  }
+
+  // --------------------------------------------------------------
+  // Fase 2 de cada ciclo: exhalar → la esfera se contrae
+  // --------------------------------------------------------------
+  function exhalePhase() {
+    instruction.textContent = 'Exhala...';
+    sphere.classList.remove('is-inhaling');
+    sphere.classList.add('is-exhaling');
+
+    setTimeout(runNextCycle, PHASE_MS);
+  }
+
+  // --------------------------------------------------------------
+  // Se ejecuta al completar los 6 ciclos (60 segundos exactos)
+  // --------------------------------------------------------------
+  function finishExercise() {
+    sphere.classList.remove('is-inhaling', 'is-exhaling'); // vuelve al reposo suavemente
+    instruction.textContent = 'Ejercicio completado. ¿Te sientes mejor?';
+    status.textContent = '';
+    startBtn.disabled = false;
+    startBtn.textContent = 'Repetir';
+  }
+
+  // ==============================================================
+  // EVENTO PRINCIPAL
+  // ==============================================================
+  startBtn.addEventListener('click', startExercise);
+</script>
+
+</body>
+</html>
